@@ -51,7 +51,7 @@ def read_json(path_to_jsonfiles):
             # if idx < 1: continue
             if idx == 20: break
         else:
-            if idx == 100: break
+            if idx == 400: break
         full_filename = file
         with open(full_filename,'r') as fi:
             dict = json.load(fi)
