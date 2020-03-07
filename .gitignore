@@ -1,0 +1,3 @@
+fairseq/chkpts/*
+fairseq/fchkpts/*
+datasets/*
