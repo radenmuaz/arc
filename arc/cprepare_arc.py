@@ -50,8 +50,8 @@ def read_json(path_to_jsonfiles):
         if 'evaluation' in file:
             # if idx < 1: continue
             if idx == 20: break
-        else:
-            if idx == 400: break
+        # else:
+            # if idx == 400: break
         full_filename = file
         with open(full_filename,'r') as fi:
             dict = json.load(fi)
@@ -152,7 +152,14 @@ def gen_seq(dirname, args, back_tr=False, pair=False):
                 if random.randint(0,1) == 1:
                     train.insert(idx, copy.deepcopy(f))
 
-
+        if idx > 200 and len(train) != 1: # too long sequences
+            # print('pop at ',idx)
+            random.shuffle(train)
+            train.pop()
+        if idx > 300 and len(train) != 1: # too long sequences
+            # print('2nd pop at ',idx)
+            random.shuffle(train)
+            train.pop()
 
         def get_rands():
             rands = SimpleNamespace()
@@ -172,6 +179,7 @@ def gen_seq(dirname, args, back_tr=False, pair=False):
         rands = get_rands()
         src = []
         for f in train:
+            
             finp = f['input'] if not back_tr else f['output']
             fout = f['output'] if not back_tr else f['input']
             if args.per_frame_random and random.randint(0,1) == 1:

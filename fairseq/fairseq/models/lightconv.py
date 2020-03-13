@@ -494,6 +494,10 @@ class LightConvEncoderLayer(nn.Module):
         self.fc1 = Linear(self.embed_dim, args.encoder_ffn_embed_dim)
         self.fc2 = Linear(args.encoder_ffn_embed_dim, self.embed_dim)
         self.layer_norms = nn.ModuleList([LayerNorm(self.embed_dim) for _ in range(2)])
+        self.rezero = False
+        if args.rezero:
+            self.rezero = True
+            self.alpha = torch.nn.Parameter(torch.zeros(1))
 
     def forward(self, x, encoder_padding_mask):
         """
@@ -525,6 +529,10 @@ class LightConvEncoderLayer(nn.Module):
         x = F.dropout(x, p=self.relu_dropout, training=self.training)
         x = self.fc2(x)
         x = F.dropout(x, p=self.dropout, training=self.training)
+        if self.rezero:
+            x = self.alpha * x
+            # print('alpha0')
+
         x = residual + x
         x = self.maybe_layer_norm(1, x, after=True)
         return x
@@ -597,6 +605,11 @@ class LightConvDecoderLayer(nn.Module):
 
         self.final_layer_norm = LayerNorm(self.embed_dim)
         self.need_attn = True
+        self.rezero = False
+        if args.rezero:
+            self.rezero = True
+            self.alpha1 = torch.nn.Parameter(torch.zeros(1))
+            self.alpha2 = torch.nn.Parameter(torch.zeros(1))
 
     def forward(self, x, encoder_out, encoder_padding_mask, incremental_state,
                 prev_conv_state=None, prev_attn_state=None, conv_mask=None,
@@ -623,6 +636,9 @@ class LightConvDecoderLayer(nn.Module):
         x = self.conv(x, incremental_state=incremental_state)
         x = self.linear2(x)
         x = F.dropout(x, p=self.dropout, training=self.training)
+        if self.rezero:
+            x = self.alpha1 * x
+            # print('alpha1')
         x = residual + x
         x = self.maybe_layer_norm(self.conv_layer_norm, x, after=True)
 
@@ -646,6 +662,9 @@ class LightConvDecoderLayer(nn.Module):
                 need_weights=(not self.training and self.need_attn),
             )
             x = F.dropout(x, p=self.dropout, training=self.training)
+            if self.rezero:
+                x = self.alpha2 * x
+                # print('alpha2')
             x = residual + x
             x = self.maybe_layer_norm(self.encoder_attn_layer_norm, x, after=True)
 
@@ -732,6 +751,8 @@ def base_architecture(args):
     args.decoder_glu = getattr(args, 'decoder_glu', True)
     args.input_dropout = getattr(args, 'input_dropout', 0.1)
     args.weight_dropout = getattr(args, 'weight_dropout', args.attention_dropout)
+    args.rezero = getattr(args, 'rezero', False)
+
 
 
 @register_model_architecture('lightconv', 'lightconv_iwslt_de_en')
@@ -838,6 +859,8 @@ def arclc_a(args):
     args.decoder_glu = getattr(args, 'decoder_glu', True)
     args.input_dropout = getattr(args, 'input_dropout', 0.1)
     args.weight_dropout = getattr(args, 'weight_dropout', args.attention_dropout)
+    args.rezero = getattr(args, 'rezero', False)
+
 
 @register_model_architecture('lightconv', 'arclc-b')
 def arclc_b(args):
@@ -887,28 +910,28 @@ def arclc_c(args):
 
 @register_model_architecture('lightconv', 'arclc-d')
 def arclc_d(args):
-    args.encoder_embed_path = getattr(args, 'encoder_embed_path', None)
-    args.encoder_embed_dim = getattr(args, 'encoder_embed_dim', 256)
-    args.encoder_ffn_embed_dim = getattr(args, 'encoder_ffn_embed_dim', 512)
-    args.encoder_layers = getattr(args, 'encoder_layers', 4)
+    args.encoder_embed_dim = getattr(args, 'encoder_embed_dim', 128)
+    args.encoder_ffn_embed_dim = getattr(args, 'encoder_ffn_embed_dim', 256)
+    
+    arclc_c(args)
+  
+@register_model_architecture('lightconv', 'arclc-f')
+def arclc_f(args):
+    args.rezero = True
+    arclc_d(args)
+
+@register_model_architecture('lightconv', 'arclc-g')
+def arclc_g(args):
+    args.rezero = True
+    args.encoder_embed_dim = getattr(args, 'encoder_embed_dim', 64)
     args.encoder_attention_heads = getattr(args, 'encoder_attention_heads', 8)
-    args.encoder_normalize_before = getattr(args, 'encoder_normalize_before', False)
-    args.encoder_learned_pos = getattr(args, 'encoder_learned_pos', True)
-    args.decoder_embed_path = getattr(args, 'decoder_embed_path', None)
-    args.decoder_layers = getattr(args, 'decoder_layers', 4)
-    args.decoder_attention_heads = getattr(args, 'decoder_attention_heads', 32)
-    args.dropout = getattr(args, 'dropout', 0.1)
-    args.share_decoder_input_output_embed = getattr(args, 'share_decoder_input_output_embed', True)
-    # args.relu_dropout = getattr(args, 'relu_dropout', 0.1)
-
-    args.encoder_kernel_size_list = getattr(args, 'encoder_kernel_size_list', [63, 63, 127, 255])
-    args.decoder_kernel_size_list = getattr(args, 'decoder_kernel_size_list', [63, 63, 127, 255])
-    arclc_a(args)
-
-    # args.decoder_output_dim = getattr(args, 'decoder_output_dim', 128)
-    # args.decoder_input_dim = getattr(args, 'decoder_input_dim', 128)
-    # args.encoder_conv_dim = getattr(args, 'encoder_conv_dim', 128)
-    # args.decoder_conv_dim = getattr(args, 'decoder_conv_dim', 128)
+    args.decoder_attention_heads = getattr(args, 'decoder_attention_heads', 8)
+    args.encoder_ffn_embed_dim = getattr(args, 'encoder_ffn_embed_dim', 128)
+    args.encoder_layers = getattr(args, 'encoder_layers', 20)
+    args.decoder_layers = getattr(args, 'decoder_layers', 10)
+    args.encoder_kernel_size_list = getattr(args, 'encoder_kernel_size_list', [7])
+    args.decoder_kernel_size_list = getattr(args, 'decoder_kernel_size_list', [7])
+    arclc_c(args)
 
 @register_model_architecture('lightconv', 'arclc-e')
 def arclc_e(args):

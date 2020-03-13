@@ -1,3 +1,4 @@
 fairseq/chkpts/*
 fairseq/fchkpts/*
 datasets/*
+fairseq/data-bin/*
